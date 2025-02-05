@@ -1,7 +1,7 @@
 # Personalized SmartEd 
 
 ## Routine : 
-1. DEvelopment period : 28jan to 6feb
+1. Development period : 28jan to 6feb
 2. Proof Of Concept : 6feb to 12feb
 
 <!--
