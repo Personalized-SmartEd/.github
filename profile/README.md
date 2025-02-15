@@ -1,20 +1,6 @@
 
 # Personalized SmartEd
 
-## Overview
-Personalized SmartEd aims to revolutionize the study sector by recommending tailored content. Our application provides personalized study plans, dynamic quizzes, skill tracking, and more, leveraging advanced machine learning models and high-performance backend services.
-
-## Features of the Overall App
-1. **Personalized Study Plans**: Uses AI to build tailored study plans for each student.
-2. **Dynamic Quiz Generation**: Creates quizzes based on student profiles and learning progress.
-3. **Skill Tracking**: Monitors and tracks student skills to provide feedback and improvement suggestions.
-4. **Static and Adaptive Assessments**: Uses Logistic Regression for static assessments and XGBoost for adaptive assessments to evaluate student performance.
-5. **Tutor Bot**: Provides personalized tutoring sessions using Retrieval Augmented Generation (RAG) architecture.
-6. **Doubt Solving Bot**: Resolves student doubts by integrating text and image inputs, using NLP and computer vision techniques.
-7. **Recommendation Engine**: Generates personalized study routines and recommends learning resources.
-8. **Knowledge Base Creation**: Develops embeddings from educational content and indexes them in a vector database for fast retrieval.
-9. **High Performance Backend Services**: Designed to handle concurrent requests efficiently using Go's concurrency model.
-10. **Cross-Platform Mobile App**: Built with Flutter, supports both iOS and Android platforms.
 
 ## Table of Contents
 1. [Introduction](#overview)
@@ -39,6 +25,21 @@ Personalized SmartEd aims to revolutionize the study sector by recommending tail
    - [Go-Backend](#go-backend-1)
    - [StudentAppFlutter](#studentappflutter-1)
 
+## Overview
+Personalized SmartEd aims to revolutionize the study sector by recommending tailored content. Our application provides personalized study plans, dynamic quizzes, skill tracking, and more, leveraging advanced machine learning models and high-performance backend services.
+
+## Features of the Overall App
+1. **Personalized Study Plans**: Uses AI to build tailored study plans for each student.
+2. **Dynamic Quiz Generation**: Creates quizzes based on student profiles and learning progress.
+3. **Skill Tracking**: Monitors and tracks student skills to provide feedback and improvement suggestions.
+4. **Static and Adaptive Assessments**: Uses Logistic Regression for static assessments and XGBoost for adaptive assessments to evaluate student performance.
+5. **Tutor Bot**: Provides personalized tutoring sessions using Retrieval Augmented Generation (RAG) architecture.
+6. **Doubt Solving Bot**: Resolves student doubts by integrating text and image inputs, using NLP and computer vision techniques.
+7. **Recommendation Engine**: Generates personalized study routines and recommends learning resources.
+8. **Knowledge Base Creation**: Develops embeddings from educational content and indexes them in a vector database for fast retrieval.
+9. **High Performance Backend Services**: Designed to handle concurrent requests efficiently using Go's concurrency model.
+10. **Cross-Platform Mobile App**: Built with Flutter, supports both iOS and Android platforms.
+
 ## Technology Stack
 
 ### ML-Service
@@ -58,7 +59,7 @@ Personalized SmartEd aims to revolutionize the study sector by recommending tail
 - **Platform:** Cross-platform (iOS and Android)
 
 ## High-Level Design (HLD)
-![High-Level Design](https://example.com/hld-image.png)
+![High-Level Design](https://github.com/Personalized-SmartEd/.github/blob/main/profile/hldv2.png)
 
 - **Data Flow:** Data from static and adaptive assessments feed into the ML models, which generate personalized content and feedback.
 - **Architecture:** Microservice-based architecture with distinct endpoints for various educational services.
