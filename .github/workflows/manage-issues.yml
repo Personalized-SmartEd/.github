@@ -1,0 +1,284 @@
+name: Manage Issues Workflow
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, reopened]
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  handle_commands:
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process issue commands (/assign, /unassign, /status, /help)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const commentBody = context.payload.comment.body;
+            const issueNumber = context.payload.issue.number;
+            const user = context.payload.comment.user.login;
+            
+            // Help command to list available commands.
+            if (commentBody.includes('/help')) {
+              await github.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: "Available commands:\n- `/assign`: Assigns the issue to you if you have less than 4 open PRs.\n- `/unassign`: Unassigns the issue if you're the current assignee.\n- `/status`: Shows the current assignment status and remaining time before auto-unassignment.\n- `/help`: Displays this help message."
+              });
+              return;
+            }
+            
+            // /assign command.
+            if (commentBody.includes('/assign')) {
+              // Check if user already has 4 open PRs.
+              const { data: prSearch } = await github.search.issues({
+                q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open author:${user}`
+              });
+              if (prSearch.total_count >= 4) {
+                await github.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `@${user} you already have 4 open pull requests. Please close some before taking a new issue.`
+                });
+                return;
+              }
+              // Assign the issue to the user.
+              await github.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                assignees: [user]
+              });
+              // Record the assignment timestamp.
+              const now = new Date().toISOString();
+              await github.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `Assigned to @${user} at ${now}.`
+              });
+              return;
+            }
+            
+            // /unassign command.
+            if (commentBody.includes('/unassign')) {
+              // Get current issue details.
+              const { data: issue } = await github.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              const assignedUsers = issue.assignees.map(a => a.login);
+              if (!assignedUsers.includes(user)) {
+                await github.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `@${user} you are not assigned to this issue.`
+                });
+                return;
+              }
+              // Remove the assignment.
+              await github.issues.removeAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                assignees: [user]
+              });
+              await github.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `@${user} has unassigned themselves from this issue.`
+              });
+              return;
+            }
+            
+            // /status command.
+            if (commentBody.includes('/status')) {
+              // Retrieve issue details and comments.
+              const { data: issue } = await github.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              const { data: comments } = await github.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              const assignComment = comments.find(c => c.body.startsWith('Assigned to @'));
+              if (assignComment) {
+                const timestampMatch = assignComment.body.match(/at\s+(.*)\./);
+                let statusMsg = "";
+                if (timestampMatch) {
+                  const assignTime = new Date(timestampMatch[1]);
+                  const now = new Date();
+                  let timeoutHours = null;
+                  const labelNames = issue.labels.map(l => l.name.toLowerCase());
+                  if (labelNames.includes('easy')) {
+                    timeoutHours = 1.5;
+                  } else if (labelNames.includes('medium')) {
+                    timeoutHours = 3;
+                  } else if (labelNames.includes('hard')) {
+                    timeoutHours = 5;
+                  }
+                  if (timeoutHours !== null) {
+                    const elapsedHours = (now - assignTime) / (1000 * 60 * 60);
+                    const remainingHours = timeoutHours - elapsedHours;
+                    statusMsg = `Issue assigned to ${assignComment.body.split(' ')[2]} at ${assignTime.toISOString()}. Time remaining before auto-unassign: ${remainingHours > 0 ? remainingHours.toFixed(2) + " hours" : "expired"}.`;
+                  } else {
+                    statusMsg = "Issue is assigned, but no auto-unassign timeout is set (missing 'easy', 'medium', or 'hard' label).";
+                  }
+                } else {
+                  statusMsg = "Issue is assigned, but the assignment timestamp could not be determined.";
+                }
+                await github.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: statusMsg
+                });
+              } else {
+                await github.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: "This issue is currently not assigned to anyone."
+                });
+              }
+              return;
+            }
+            
+            console.log("No recognized command found.");
+  
+  handle_pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR for proper issue assignment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            // Expecting an issue reference in the PR body (e.g., "Fixes #123")
+            const issueRegex = /Fixes\s+#(\d+)/i;
+            const match = pr.body && pr.body.match(issueRegex);
+            if (!match) {
+              console.log('No issue reference found in PR body.');
+              return;
+            }
+            const issueNumber = parseInt(match[1]);
+            // Retrieve the referenced issue.
+            const { data: issue } = await github.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const prAuthor = pr.user.login;
+            const assignedUsers = issue.assignees.map(a => a.login);
+            if (!assignedUsers.includes(prAuthor)) {
+              // Add "blocked" label if the PR author is not the assignee.
+              await github.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['blocked']
+              });
+            }
+  
+  scheduled_timeout:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for timed-out assignments
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Retrieve open issues (you may filter for those with assignment comments).
+            const { data: issues } = await github.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            const now = new Date();
+            for (const issue of issues) {
+              const { data: comments } = await github.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number
+              });
+              const assignComment = comments.find(c => c.body.startsWith('Assigned to @'));
+              if (!assignComment) continue;
+              const timestampMatch = assignComment.body.match(/at\s+(.*)\./);
+              if (!timestampMatch) continue;
+              const assignTime = new Date(timestampMatch[1]);
+              let timeoutHours = null;
+              const labelNames = issue.labels.map(l => l.name.toLowerCase());
+              if (labelNames.includes('easy')) {
+                timeoutHours = 1.5;
+              } else if (labelNames.includes('medium')) {
+                timeoutHours = 3;
+              } else if (labelNames.includes('hard')) {
+                timeoutHours = 5;
+              }
+              if (timeoutHours === null) continue; // No auto-unassign timeout applicable.
+              const diffHours = (now - assignTime) / (1000 * 60 * 60);
+              if (diffHours >= timeoutHours) {
+                // Determine the assigned user from the assignment comment.
+                const assignedUserMatch = assignComment.body.match(/Assigned to @(\S+)\sat/);
+                if (!assignedUserMatch) continue;
+                const assignedUser = assignedUserMatch[1];
+                // Check for an existing PR that references this issue from the assigned user.
+                const { data: prSearch } = await github.search.issues({
+                  q: `repo:${context.repo.owner}/${context.repo.repo} is:pr "Fixes #${issue.number}" author:${assignedUser}`
+                });
+                if (prSearch.total_count === 0) {
+                  // Auto unassign due to timeout.
+                  await github.issues.removeAssignees({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    assignees: [assignedUser]
+                  });
+                  await github.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    body: `@${assignedUser} assignment timed out (no PR within ${timeoutHours} hours). You are blocked from this issue for 4 hours.`
+                  });
+                }
+              }
+            }
+  
+  check_block:
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if user is blocked on the issue before further actions
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueNumber = context.payload.issue.number;
+            const user = context.payload.comment.user.login;
+            const { data: comments } = await github.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            // Look for a block comment mentioning that the user is blocked.
+            const blockComment = comments.find(c => c.body.includes(`@${user} assignment timed out`));
+            if (blockComment) {
+              await github.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `@${user} you are currently blocked from reassigning or accessing this issue due to a recent timeout. Please try again after 4 hours.`
+              });
+            }
